@@ -175,6 +175,17 @@ def log(site_id, message):
     print(f"[{site_id}] {message}")
 
 
+def resolve_webhook(value):
+    """Resolve $ENV_VAR references in webhook URLs."""
+    if value and value.startswith('$'):
+        env_var = value[1:]
+        resolved = os.environ.get(env_var)
+        if not resolved:
+            raise ValueError(f"env var {env_var} is not set")
+        return resolved
+    return value
+
+
 def run_site(site):
     site_id = site['id']
     extractor_type = site.get('type', 'generic')
@@ -201,7 +212,8 @@ def run_site(site):
 
     if changes:
         try:
-            send_discord(site['discord_webhook'], build_embed(site, changes))
+            webhook = resolve_webhook(site['discord_webhook'])
+            send_discord(webhook, build_embed(site, changes))
             log(site_id, f"Changes detected and Discord notified: {list(changes.keys())}")
         except Exception as e:
             log(site_id, f"ERROR sending Discord notification: {e}")

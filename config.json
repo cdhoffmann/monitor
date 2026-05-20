@@ -6,7 +6,7 @@
       "url": "https://iviviv.bigcartel.com/products",
       "base_url": "https://iviviv.bigcartel.com",
       "type": "bigcartel",
-      "discord_webhook": "https://discord.com/api/webhooks/1506703372332437714/NEXUD5ge6cbcknry7QLD0XmSOwO1gE6Q2QNMPlDKs1Jw8th67_lt9Qj5J-UuzA7YJSbv"
+      "discord_webhook": "$DISCORD_WEBHOOK_IVIVIV"
     }
   ]
 }
