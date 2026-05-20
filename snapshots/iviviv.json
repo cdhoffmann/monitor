@@ -1,0 +1,22 @@
+{
+  "/product/frhothsty": {
+    "name": "DL + WRAPPED SET / FRHOTHSTY MX",
+    "sold_out": true,
+    "price": "$666.00"
+  },
+  "/product/godcomplex": {
+    "name": "VAALDAL / GOD COMPLEX MX",
+    "sold_out": true,
+    "price": "$666.00"
+  },
+  "/product/kupcake": {
+    "name": "DL + WRAPPED SET / KUPCAKE MX",
+    "sold_out": true,
+    "price": "$666.00"
+  },
+  "/product/pushaman": {
+    "name": "VAALDAL / PUSHA MAN MX",
+    "sold_out": true,
+    "price": "$666.00"
+  }
+}
