@@ -14,11 +14,13 @@ import sys
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 BASE_DIR = Path(__file__).parent
 SNAPSHOTS_DIR = BASE_DIR / 'snapshots'
 LOGS_DIR = BASE_DIR / 'logs'
 CONFIG_FILE = BASE_DIR / 'config.json'
+HEARTBEAT_STATE = SNAPSHOTS_DIR / '_heartbeat.json'
 
 SNAPSHOTS_DIR.mkdir(exist_ok=True)
 LOGS_DIR.mkdir(exist_ok=True)
@@ -40,6 +42,18 @@ def save_snapshot(site_id, data):
     path = SNAPSHOTS_DIR / f'{site_id}.json'
     with open(path, 'w') as f:
         json.dump(data, f, indent=2)
+
+
+def load_heartbeat_state():
+    if not HEARTBEAT_STATE.exists():
+        return {}
+    with open(HEARTBEAT_STATE) as f:
+        return json.load(f)
+
+
+def save_heartbeat_state(state):
+    with open(HEARTBEAT_STATE, 'w') as f:
+        json.dump(state, f, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +165,24 @@ def build_embed(site, changes):
     }
 
 
+def build_heartbeat_embed(sites, changes_since):
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+    site_names = ', '.join(s['name'] for s in sites) or 'no sites configured'
+    if changes_since == 0:
+        summary = "No product changes in the last 24 hours. 👀"
+    else:
+        plural = 's' if changes_since != 1 else ''
+        summary = f"{changes_since} change alert{plural} sent in the last 24 hours."
+    return {
+        "embeds": [{
+            "title": "🟢 Monitor Heartbeat",
+            "description": f"Still watching **{site_names}** — the monitor is running normally.\n\n{summary}",
+            "color": 0x2ECC71,
+            "footer": {"text": f"Daily health check • {now}"},
+        }]
+    }
+
+
 def send_discord(webhook_url, payload):
     # urllib is blocked by Cloudflare on Discord's API; curl bypasses it
     result = subprocess.run(
@@ -187,6 +219,7 @@ def resolve_webhook(value):
 
 
 def run_site(site):
+    """Run one site. Returns True if a change alert was sent, else False."""
     site_id = site['id']
     extractor_type = site.get('type', 'generic')
 
@@ -195,32 +228,77 @@ def run_site(site):
         current = extractor.extract(site['url'])
     except Exception as e:
         log(site_id, f"ERROR fetching: {e}")
-        return
+        return False
 
     if not current:
         log(site_id, "WARNING: No items extracted — page structure may have changed")
-        return
+        return False
 
     snapshot = load_snapshot(site_id)
 
     if snapshot is None:
         save_snapshot(site_id, current)
         log(site_id, f"First run — baseline saved ({len(current)} items)")
-        return
+        return False
 
     changes = compare_generic(current, snapshot) if extractor_type == 'generic' else compare_products(current, snapshot)
 
+    alerted = False
     if changes:
         try:
             webhook = resolve_webhook(site['discord_webhook'])
             send_discord(webhook, build_embed(site, changes))
             log(site_id, f"Changes detected and Discord notified: {list(changes.keys())}")
+            alerted = True
         except Exception as e:
             log(site_id, f"ERROR sending Discord notification: {e}")
     else:
         log(site_id, f"No changes ({len(current)} items)")
 
     save_snapshot(site_id, current)
+    return alerted
+
+
+def maybe_send_heartbeat(config, sites, alerts_this_run):
+    """Post a once-per-day health check so silence is distinguishable from death.
+
+    Fires on the first run at/after the configured local hour each day. State
+    (last-sent date + running change count) lives in snapshots/_heartbeat.json,
+    which the workflow commits back so it survives across runs.
+    """
+    hb = config.get('heartbeat', {})
+    if hb.get('enabled') is False:
+        return
+    hour = hb.get('hour', 9)
+    tz_name = hb.get('tz', 'America/Denver')
+    webhook_ref = hb.get('discord_webhook') or (sites[0]['discord_webhook'] if sites else None)
+    if not webhook_ref:
+        return
+
+    state = load_heartbeat_state()
+    state['changes_since'] = state.get('changes_since', 0) + alerts_this_run
+    dirty = alerts_this_run > 0
+
+    try:
+        now_local = datetime.now(ZoneInfo(tz_name))
+    except Exception as e:
+        log('heartbeat', f"ERROR resolving timezone '{tz_name}': {e}")
+        now_local = datetime.now(timezone.utc)
+    today = now_local.strftime('%Y-%m-%d')
+
+    if now_local.hour >= hour and state.get('last_sent_date') != today:
+        try:
+            webhook = resolve_webhook(webhook_ref)
+            code = send_discord(webhook, build_heartbeat_embed(sites, state['changes_since']))
+            log('heartbeat', f"Daily heartbeat sent (HTTP {code}); {state['changes_since']} change(s) since last")
+            state['last_sent_date'] = today
+            state['changes_since'] = 0
+            dirty = True
+        except Exception as e:
+            log('heartbeat', f"ERROR sending heartbeat: {e}")
+
+    if dirty:
+        save_heartbeat_state(state)
 
 
 # ---------------------------------------------------------------------------
@@ -231,17 +309,22 @@ def main():
     with open(CONFIG_FILE) as f:
         config = json.load(f)
 
-    sites = config.get('sites', [])
+    all_sites = config.get('sites', [])
+    target = sys.argv[1] if len(sys.argv) > 1 else None
 
-    if len(sys.argv) > 1:
-        target = sys.argv[1]
-        sites = [s for s in sites if s['id'] == target]
+    if target:
+        sites = [s for s in all_sites if s['id'] == target]
         if not sites:
             print(f"Site '{target}' not found in config.json", file=sys.stderr)
             sys.exit(1)
+    else:
+        sites = all_sites
 
-    for site in sites:
-        run_site(site)
+    alerts = sum(1 for site in sites if run_site(site))
+
+    # Only run the heartbeat on full scheduled runs, not single-site debug runs.
+    if not target:
+        maybe_send_heartbeat(config, all_sites, alerts)
 
 
 if __name__ == '__main__':

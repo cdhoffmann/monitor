@@ -8,5 +8,10 @@
       "type": "bigcartel",
       "discord_webhook": "$DISCORD_WEBHOOK_IVIVIV"
     }
-  ]
+  ],
+  "heartbeat": {
+    "hour": 9,
+    "tz": "America/Denver",
+    "discord_webhook": "$DISCORD_WEBHOOK_IVIVIV"
+  }
 }

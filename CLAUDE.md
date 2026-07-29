@@ -45,6 +45,21 @@ GitHub Actions' built-in cron scheduler was unreliable so it was removed. Instea
 
 The workflow commits snapshot changes back to the repo with `[skip ci]` to avoid loops.
 
+## Daily Heartbeat
+So silence can be told apart from a dead monitor, a once-per-day health check is posted to Discord. It piggybacks on the every-5-minute run rather than a separate cron: on the first run at/after the configured local hour, it fires and then stays quiet until the next day.
+
+State lives in `snapshots/_heartbeat.json` (`last_sent_date` + a `changes_since` counter), which the existing commit step persists across runs. The counter increments whenever a real change alert fires and resets when the heartbeat posts, so the message honestly reports either "No product changes in the last 24 hours" or "N change alert(s) sent."
+
+Configured via an optional top-level `heartbeat` block in `config.json`:
+```json
+"heartbeat": {
+  "hour": 9,
+  "tz": "America/Denver",
+  "discord_webhook": "$DISCORD_WEBHOOK_IVIVIV"
+}
+```
+Defaults: `hour` 9, `tz` `America/Denver`, webhook falls back to the first site's. Set `"enabled": false` to turn it off. Only runs on full scheduled runs (`python3 monitor.py`), not single-site debug runs.
+
 ## Discord Webhooks
 Webhook URLs are never stored in the repo. Each site references an env var in `config.json`:
 ```json
