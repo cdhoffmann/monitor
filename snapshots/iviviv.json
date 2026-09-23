@@ -1,6 +1,11 @@
 {
-  "/product/frhothsty": {
-    "name": "DL + WRAPPED SET / FRHOTHSTY MX",
+  "/product/peepshow-fleshtemple-mx": {
+    "name": "PEEPSHOW / FLESHTEMPLE MX",
+    "sold_out": true,
+    "price": "$666.00"
+  },
+  "/product/nightmare": {
+    "name": "PEEPSHOW / NIGHTMARE MX",
     "sold_out": true,
     "price": "$666.00"
   },
@@ -9,8 +14,8 @@
     "sold_out": true,
     "price": "$666.00"
   },
-  "/product/kupcake": {
-    "name": "DL + WRAPPED SET / KUPCAKE MX",
+  "/product/oilslick": {
+    "name": "PEEPSHOW / OIL SLICK MX",
     "sold_out": true,
     "price": "$666.00"
   },
