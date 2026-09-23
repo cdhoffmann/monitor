@@ -4,8 +4,8 @@
     "sold_out": true,
     "price": "$666.00"
   },
-  "/product/godcomplex": {
-    "name": "VAALDAL / GOD COMPLEX MX",
+  "/product/moondrop": {
+    "name": "VAALDAL / MOON DROP MX",
     "sold_out": true,
     "price": "$666.00"
   },
@@ -14,8 +14,8 @@
     "sold_out": true,
     "price": "$666.00"
   },
-  "/product/pushaman": {
-    "name": "VAALDAL / PUSHA MAN MX",
+  "/product/lizardwizard": {
+    "name": "VAALDAL / LIZARD WIZARD MX",
     "sold_out": true,
     "price": "$666.00"
   }
