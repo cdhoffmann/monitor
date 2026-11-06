@@ -9,6 +9,7 @@ Usage:
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.request
@@ -185,14 +186,25 @@ def build_heartbeat_embed(sites, changes_since):
 
 def send_discord(webhook_url, payload):
     # urllib is blocked by Cloudflare on Discord's API; curl bypasses it
-    result = subprocess.run(
-        ['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}',
-         '-H', 'Content-Type: application/json',
-         '-d', json.dumps(payload),
-         webhook_url],
-        capture_output=True, text=True, timeout=15,
-    )
-    return int(result.stdout.strip()) if result.stdout.strip().isdigit() else None
+    try:
+        result = subprocess.run(
+            ['curl', '--disable', '--silent', '--output', '/dev/null',
+             '--write-out', '%{http_code}', '--config', '-',
+             '--header', 'Content-Type: application/json',
+             '--data', json.dumps(payload)],
+            input=f'url = {json.dumps(webhook_url)}\n',
+            capture_output=True, text=True, timeout=15,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Discord request timed out") from None
+    except OSError:
+        raise RuntimeError("Could not run curl for Discord request") from None
+    if result.returncode:
+        raise RuntimeError(f"Discord request failed (curl exit {result.returncode})")
+    code = int(result.stdout.strip()) if result.stdout.strip().isdigit() else None
+    if code is None or not 200 <= code < 300:
+        raise RuntimeError(f"Discord request failed (HTTP {code})")
+    return code
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +212,11 @@ def send_discord(webhook_url, payload):
 # ---------------------------------------------------------------------------
 
 def log(site_id, message):
+    message = re.sub(
+        r'https?://(?:(?:canary|ptb)\.)?discord(?:app)?\.com/'
+        r'api/(?:v\d+/)?webhooks/[^\s\'"<>]+',
+        '[REDACTED DISCORD WEBHOOK]', message, flags=re.IGNORECASE,
+    )
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     entry = f"[{ts}] {message}\n"
     with open(LOGS_DIR / f'{site_id}.log', 'a') as f:
@@ -208,14 +225,14 @@ def log(site_id, message):
 
 
 def resolve_webhook(value):
-    """Resolve $ENV_VAR references in webhook URLs."""
-    if value and value.startswith('$'):
-        env_var = value[1:]
-        resolved = os.environ.get(env_var)
-        if not resolved:
-            raise ValueError(f"env var {env_var} is not set")
-        return resolved
-    return value
+    """Only allow webhook credentials supplied through environment variables."""
+    if not isinstance(value, str) or not re.fullmatch(r'\$[A-Za-z_][A-Za-z0-9_]*', value):
+        raise ValueError("discord_webhook must be a $ENV_VAR reference, not a literal URL")
+    env_var = value[1:]
+    resolved = os.environ.get(env_var)
+    if not resolved:
+        raise ValueError(f"env var {env_var} is not set")
+    return resolved
 
 
 def run_site(site):
@@ -252,6 +269,7 @@ def run_site(site):
             alerted = True
         except Exception as e:
             log(site_id, f"ERROR sending Discord notification: {e}")
+            return False
     else:
         log(site_id, f"No changes ({len(current)} items)")
 

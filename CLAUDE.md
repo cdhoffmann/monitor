@@ -68,6 +68,24 @@ Webhook URLs are never stored in the repo. Each site references an env var in `c
 
 The actual URL is stored as a **GitHub Actions secret** (`DISCORD_WEBHOOK_IVIVIV`).
 
+Literal webhook URLs in configuration are rejected. Keep local credentials in
+environment variables; `.env` and `.env.*` files are ignored (not loaded automatically).
+Runtime logs are not tracked.
+
+Enable the local staged-webhook guard after cloning:
+```bash
+git config core.hooksPath .githooks
+```
+The `Secret checks` workflow also rejects committed webhook URLs on pushes and
+pull requests. These checks detect Discord webhook URLs, not every kind of secret.
+Keep GitHub secret scanning and push protection enabled in repository settings.
+Local hooks can be bypassed, and CI runs after a push, so neither replaces push
+protection or careful review of staged changes.
+
+If a webhook is exposed, delete/recreate it in Discord and update the Actions
+secret. Never paste the replacement into chat, issues, or commits. Removing it
+from the latest commit or rewriting history does not revoke existing copies.
+
 **Important:** Discord auto-invalidates webhook URLs posted inside Discord messages. If a webhook stops working, create a new one and update the secret — don't paste the URL in chat.
 
 **Also important:** Python's `urllib` is blocked by Cloudflare on Discord's API. All Discord requests use `curl` via subprocess.
